@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">RatpToilets</string>
+    <string name="listtoilets_title">List Toilets</string>
+    <string name="listtoilets_row_address">%1$s, %2$s</string>
+    <string name="listtoilets_row_icon_accessible">accessible</string>
+    <string name="listtoilets_row_icon_notaccessible">not accessible</string>
+    <string name="listtoilets_row_distance_meter">%f m</string>
+    <string name="listtoilets_row_distance_km">%.3f km</string>
+    <string name="all_error">An error has occurred, if the problem persists contact customer service.</string>
+
+</resources>
