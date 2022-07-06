@@ -1,3 +1,9 @@
+Strategy
+
+I used the standard MVVM strategy using compose / view model / repository / retrofit. As the api logic is simple, I have used LiveData rather than Flows.
+
+TODO
+
  - Add navigation
 
 ListToiletsScreen
