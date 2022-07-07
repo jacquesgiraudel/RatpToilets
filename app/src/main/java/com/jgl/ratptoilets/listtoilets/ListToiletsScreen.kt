@@ -2,6 +2,7 @@ package com.jgl.ratptoilets.listtoilets
 
 import android.Manifest
 import android.app.Application
+import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,10 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.AbstractSavedStateViewModelFactory
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.savedstate.SavedStateRegistryOwner
 import com.jgl.ratptoilets.R
@@ -31,6 +29,7 @@ import com.jgl.ratptoilets.data.model.Toilet
 import com.jgl.ratptoilets.listtoilets.ListToiletsViewModel.Result.*
 import com.jgl.ratptoilets.ui.theme.RatpToiletsTheme
 import com.jgl.ratptoilets.ui.theme.Typography
+import com.jgl.ratptoilets.ui.theme.onRequestPermission
 
 @Composable
 fun ListToiletsScreen(owner: SavedStateRegistryOwner, lifeCycle: Lifecycle, application: Application) {
@@ -39,53 +38,23 @@ fun ListToiletsScreen(owner: SavedStateRegistryOwner, lifeCycle: Lifecycle, appl
 
     // factory to manage the saved state and be able to observe the activity lifecycle in the view model
     val viewModel: ListToiletsViewModel = viewModel(
-        factory = object : AbstractSavedStateViewModelFactory(owner, null) {
-
-            override fun <T : ViewModel?> create(
-                key: String,
-                modelClass: Class<T>,
-                handle: SavedStateHandle
-            ): T {
-                val viewModel = ListToiletsViewModel(application, lifeCycle, handle)
-
-                return viewModel as T
-            }
-        }
+        factory = ListToiletsViewModel.getFactory(owner, lifeCycle, application)
     )
 
     val result = viewModel.toilets.observeAsState()
     val accessibleOnly = viewModel.accessibleOnly.observeAsState()
+
     val onToggleAccessibility: () -> Unit = {
         viewModel.toggleAccessibility()
     }
     var showDistancePermission by remember { mutableStateOf(false) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        when (PackageManager.PERMISSION_GRANTED) {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) -> {
-                showDistancePermission = true
-                viewModel.startLocationUpdates()
-            }
-        }
+
+    val observeLocation = {
+        showDistancePermission = true
+        viewModel.startLocationUpdates()
     }
 
-    LaunchedEffect("") {
-        when (PackageManager.PERMISSION_GRANTED) {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) -> {
-                showDistancePermission = true
-                viewModel.startLocationUpdates()
-            }
-            else -> {
-                // Asking for permission
-                launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
-            }
-        }
-    }
+    RequestPermission(context, observeLocation)
 
     RatpToiletsTheme {
         Surface(
@@ -95,6 +64,23 @@ fun ListToiletsScreen(owner: SavedStateRegistryOwner, lifeCycle: Lifecycle, appl
             ToiletsListContainer(result = result.value!!, accessibleOnly.value!!, onToggleAccessibility) {
                 ToiletsList((result.value as Success).toilets!!, showDistancePermission)
             }
+        }
+    }
+}
+
+@Composable
+fun RequestPermission(context: Context, observeLocation: () -> Unit){
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        onRequestPermission(context, null) {
+            observeLocation()
+        }
+    }
+
+    LaunchedEffect("") {
+        onRequestPermission(
+            context,
+            { launcher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
+            observeLocation()
         }
     }
 }
@@ -115,22 +101,20 @@ fun ToiletsListContainer(result: ListToiletsViewModel.Result, accessibleOnly: Bo
             )
             }
         ){
-        when (result) {
-            is Success -> {
-                content()
-            }
 
-            is Error -> {
+        when (result) {
+            is Success ->
+                content()
+
+            is Error ->
                 Row(Modifier.padding(16.dp)) {
                     Text(stringResource(id = R.string.all_error))
                 }
-            }
 
-            is Pending -> {
+            is Pending ->
                 Box (contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     CircularProgressIndicator()
                 }
-            }
         }
 
     }

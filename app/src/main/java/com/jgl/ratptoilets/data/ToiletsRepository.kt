@@ -8,8 +8,6 @@ class ToiletsRepository {
     private val toiletsDao = ToiletsDao()
 
     suspend fun getToilets(): ToiletsRequest {
-        return withContext(Dispatchers.IO){
-            toiletsDao.ratpService.getToilets()
-        }
+        return toiletsDao.getToilets()
     }
 }

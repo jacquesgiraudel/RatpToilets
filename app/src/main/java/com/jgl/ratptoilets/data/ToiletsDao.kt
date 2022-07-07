@@ -3,6 +3,8 @@ package com.jgl.ratptoilets.data
 import com.jgl.ratptoilets.data.model.ToiletsRequest
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -13,7 +15,7 @@ import retrofit2.http.Query
 
 class ToiletsDao {
 
-    var ratpService: RatpService
+    private var ratpService: RatpService
 
     init{
         val logging = HttpLoggingInterceptor()
@@ -34,6 +36,12 @@ class ToiletsDao {
             .build()
 
         ratpService = retrofit.create(RatpService::class.java)
+    }
+
+    suspend fun getToilets(): ToiletsRequest{
+        return withContext(Dispatchers.IO){
+            ratpService.getToilets()
+        }
     }
 
     companion object{

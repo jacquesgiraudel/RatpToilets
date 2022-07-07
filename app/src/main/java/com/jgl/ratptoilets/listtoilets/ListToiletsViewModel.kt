@@ -7,10 +7,12 @@ import android.content.pm.PackageManager
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
+import androidx.savedstate.SavedStateRegistryOwner
 import com.google.android.gms.location.*
 import com.jgl.ratptoilets.MainActivity
 import com.jgl.ratptoilets.data.ToiletsRepository
 import com.jgl.ratptoilets.data.model.Toilet
+import com.jgl.ratptoilets.ui.theme.onRequestPermission
 import kotlinx.coroutines.launch
 
 class ListToiletsViewModel(private val app: Application, lifecycle: Lifecycle, private val savedStateHandle: SavedStateHandle): AndroidViewModel(app), DefaultLifecycleObserver {
@@ -30,33 +32,43 @@ class ListToiletsViewModel(private val app: Application, lifecycle: Lifecycle, p
     init {
 
         if (savedStateHandle.contains(MainActivity.SAVE_TOILETS)){
-            var savedToilets = savedStateHandle.getLiveData<List<Toilet>>(MainActivity.SAVE_TOILETS).value
-            if (savedStateHandle.contains(MainActivity.SAVE_ACCESSIBLE_ONLY)){
-                _accessibleOnly = savedStateHandle.getLiveData<Boolean>(MainActivity.SAVE_ACCESSIBLE_ONLY)
-                if (_accessibleOnly.value == true){
-                    savedToilets = savedToilets!!.filter { it.fields!!.accesPmr == "Oui" }
-                    (accessibleOnly as MutableLiveData).value = true
-                }
-
-            }
-            (toilets as MutableLiveData).value =
-                Result.Success(savedToilets)
+            restoreFromSavedState()
         }
         else {
-            viewModelScope.launch {
-                try {
-                    val toiletsRequest = ToiletsRepository().getToilets()
-                    (_status as MutableLiveData).value = Result.Success(toiletsRequest.records)
-                    savedStateHandle[MainActivity.SAVE_TOILETS] = (toilets.value as Result.Success).toilets
-                }
-                catch (exception: Exception){
-                    (_status as MutableLiveData).value = Result.Error(Result.ErrorMsg.DEFAULT)
-                }
-            }
+            getToilets()
         }
 
         // synchronize activity lifecycle to the view model to catch events
         lifecycle.addObserver(this)
+    }
+
+    private fun getToilets() {
+        viewModelScope.launch {
+            try {
+                val toiletsRequest = ToiletsRepository().getToilets()
+                (_status as MutableLiveData).value = Result.Success(toiletsRequest.records)
+                savedStateHandle[MainActivity.SAVE_TOILETS] =
+                    (toilets.value as Result.Success).toilets
+            } catch (exception: Exception) {
+                (_status as MutableLiveData).value = Result.Error(Result.ErrorMsg.DEFAULT)
+            }
+        }
+    }
+
+    private fun restoreFromSavedState() {
+        var savedToilets =
+            savedStateHandle.getLiveData<List<Toilet>>(MainActivity.SAVE_TOILETS).value
+        if (savedStateHandle.contains(MainActivity.SAVE_ACCESSIBLE_ONLY)) {
+            _accessibleOnly =
+                savedStateHandle.getLiveData<Boolean>(MainActivity.SAVE_ACCESSIBLE_ONLY)
+            if (_accessibleOnly.value == true) {
+                savedToilets = savedToilets!!.filter { it.fields!!.accesPmr == "Oui" }
+                (accessibleOnly as MutableLiveData).value = true
+            }
+
+        }
+        (toilets as MutableLiveData).value =
+            Result.Success(savedToilets)
     }
 
     /**
@@ -105,13 +117,8 @@ class ListToiletsViewModel(private val app: Application, lifecycle: Lifecycle, p
     }
 
     override fun onResume(owner: LifecycleOwner) {
-        if (
-            ContextCompat.checkSelfPermission(
-                app.applicationContext,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            if (! requestingLocationUpdates) {
+        onRequestPermission(app.applicationContext, null) {
+            if (!requestingLocationUpdates) {
                 startLocationUpdates()
             }
         }
@@ -162,5 +169,19 @@ class ListToiletsViewModel(private val app: Application, lifecycle: Lifecycle, p
 
     companion object{
         const val TIME_BETWEEN_2_STATIONS = 20000L
+        val getFactory = fun(owner: SavedStateRegistryOwner, lifeCycle: Lifecycle, application: Application): AbstractSavedStateViewModelFactory{
+            return object : AbstractSavedStateViewModelFactory(owner, null) {
+
+                override fun <T : ViewModel?> create(
+                    key: String,
+                    modelClass: Class<T>,
+                    handle: SavedStateHandle
+                ): T {
+                    val viewModel = ListToiletsViewModel(application, lifeCycle, handle)
+
+                    return viewModel as T
+                }
+            }
+        }
     }
 }
